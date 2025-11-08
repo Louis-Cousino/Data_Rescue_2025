@@ -26,7 +26,7 @@ explicit_wait <- function(using, element, timeout, remDr) {
       
       print("Could Not Find Element")
       
-      check <<- FALSE # <<- searches for a vaiable named "check" throughout parent scopes and changes it.
+      check <<- FALSE # <<- searches for a variable named "check" throughout parent scopes and changes it.
       
     })
     

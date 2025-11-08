@@ -27,7 +27,7 @@ source(here::here("helper_functions", "explicit_wait.R"))
 
 # Defining download directory
 
-download_directory <- here::here("Archiving", "Dept of Ed", "DataLab Tables", "files")
+download_directory <- here::here("temp")
 
 # Extracting list of publications
 
