@@ -365,11 +365,11 @@ scraping_tibble <- scraping_tibble |>
                    sex == "Sex - Female" & transmission == "Male Transmission Options" ~ FALSE,
                    TRUE ~ TRUE))
 
-for (i in 153:165) {
+for (i in 1:(nrow(scraping_tibble)+1)) {
   
   print(i)
   
-  if (i == 153) {
+  if (i == 1) {
     
     timer <- timeR::createTimer()
     
@@ -387,7 +387,7 @@ for (i in 153:165) {
     
   }
   
-  if (i == 165) {
+  if (i == (nrow(scraping_tibble)+1)) {
     
     # This is at the top so that if the last iteration gets skipped, then this still trips.
     
