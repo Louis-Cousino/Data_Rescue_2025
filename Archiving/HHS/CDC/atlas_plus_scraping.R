@@ -95,7 +95,7 @@ driver$server$stop()
 geo_metadata <- tibble(
   
   text = c("National", "Region", "State", "County - All", "County - EHE", "MSA - Major", "MSA - All"),
-  value = c("document.querySelector('#wizardQT-p-1 > div:nth-child(3) > div.panel-body > fieldset > label:nth-child(2)').click();",
+  value = c("document.querySelector('#wizardQT-p-1 > div:nth-child(3) > div.panel-body > fieldset > label:nth-child(2)');",
             "document.querySelector('#wizardQT-p-1 > div:nth-child(3) > div.panel-body > fieldset > label:nth-child(3)').click(); document.querySelector('#radioRegions > label').click();",
             "document.querySelector('#wizardQT-p-1 > div:nth-child(3) > div.panel-body > fieldset > label:nth-child(4)').click(); document.querySelector('#radioStatesTerr > label').click();",
             "document.querySelector('#wizardQT-p-1 > div:nth-child(3) > div.panel-body > fieldset > label:nth-child(5)').click(); document.querySelector('#radioStatesTerr > label').click();",
@@ -116,7 +116,7 @@ year_metadata <- tibble(
 age_metadata <- tibble(
   
   text = c("All ages 13 years and older" , "Age - 13 and older", "Age - 13 to 24", "Age - 50 and older"),
-  value = c("document.querySelector('#allAge > label').click();",
+  value = c("document.querySelector('#allAge > label');",
             "document.querySelector('#specificAge > label > span').click(); document.querySelectorAll('#specificAgeGroupsList > fieldset > div:nth-child(n+2):nth-child(-n+7) > label').forEach(el => el.click());",
             "document.querySelector('#youngAgeGroup > label').click(); document.querySelectorAll('#youngAgeGroupsList > fieldset > div:nth-child(n+2):nth-child(-n+3) > label').forEach(el => el.click());",
             "document.querySelector('#olderAgeGroup > label').click(); document.querySelectorAll('#olderAgeGroupsList > fieldset > div:nth-child(n+2):nth-child(-n+9) > label').forEach(el => el.click());")
@@ -127,7 +127,7 @@ race_metadata <- tibble(
   
   text = c("All Races_Ethnicities",
            "Race_Ethnicity"),
-  value = c("document.querySelector('#allRaces').click();",
+  value = c("document.querySelector('#allRaces');",
             "document.querySelector('#specificRace > label').click(); document.querySelectorAll('#raceList > fieldset > div:nth-child(n+2):nth-child(-n+8) > label').forEach(el => el.click());")
   
 )
@@ -135,7 +135,7 @@ race_metadata <- tibble(
 sex_metadata <- tibble(
   
   text = c("Both Sexes", "Sex - Male", "Sex - Female"),
-  value = c("document.querySelector('#allTC').click();",
+  value = c("document.querySelector('#allTC');",
             "document.querySelector('#specificTransCat > label').click(); document.querySelectorAll('#transcatList > fieldset > div:nth-child(n+2):nth-child(-n+6) > label').forEach(el => el.click());", 
             "document.querySelector('#specificTransCat > label').click(); document.querySelector('#transcatList > fieldset > div:nth-child(3) > label').click(); document.querySelector('#transcatList > fieldset > div:nth-child(5) > label').click(); document.querySelector('#transcatList > fieldset > div:nth-child(6) > label').click();")
   
@@ -145,7 +145,7 @@ sex_metadata <- tibble(
 transmission_metadata <- tibble(
   
   text = c("All Transmission", "Male Transmission Options", "Female Transmission Options"),
-  value = c("document.querySelector('#divTransCat > div > div.panel-body > fieldset > div:nth-child(2) > label').click();",
+  value = c("document.querySelector('#divTransCat > div > div.panel-body > fieldset > div:nth-child(2) > label');",
             "document.querySelector('#specificTransCat > label').click(); document.querySelectorAll('#transcatList > fieldset > div:nth-child(n+2):nth-child(-n+6) > label').forEach(el => el.click());", 
             "document.querySelector('#specificTransCat > label').click(); document.querySelector('#transcatList > fieldset > div:nth-child(3) > label').click(); document.querySelector('#transcatList > fieldset > div:nth-child(5) > label').click(); document.querySelector('#transcatList > fieldset > div:nth-child(6) > label').click();")
   
@@ -365,6 +365,8 @@ scraping_tibble <- scraping_tibble |>
                    sex == "Sex - Female" & transmission == "Male Transmission Options" ~ FALSE,
                    TRUE ~ TRUE))
 
+## EXAMINE 961
+
 for (i in 1:(nrow(scraping_tibble)+1)) {
   
   print(i)
@@ -485,9 +487,9 @@ for (i in 1:(nrow(scraping_tibble)+1)) {
                                   return text_return") |> 
       as.character()
     
-    if (str_detect(age_class, "disabled") == TRUE && scraping_tibble$race[i] != "All ages 13 years and older") {
+    if (str_detect(age_class, "disabled") == TRUE && scraping_tibble$age[i] != "All ages 13 years and older") {
       return_metadata[[length(return_metadata) + 1]] <- list(run = i,
-                                                             location = "NA - Stratification not available")
+                                                             location = "NA - Stratification not available (Based on Age)")
       
       next
     }
@@ -495,20 +497,32 @@ for (i in 1:(nrow(scraping_tibble)+1)) {
     if (younger_age_option == "none" && scraping_tibble$age[i] == "Age - 13 to 24") {
       
       return_metadata[[length(return_metadata) + 1]] <- list(run = i,
-                                                             location = "NA - Stratification not available")
+                                                             location = "NA - Stratification not available (Based on Young Age)")
       
       next
       
     } else if (older_age_option == "none" && scraping_tibble$age[i] == "Age - 50 and older") {
       
       return_metadata[[length(return_metadata) + 1]] <- list(run = i,
-                                                             location = "NA - Stratification not available")
+                                                             location = "NA - Stratification not available (Based on Old Age)")
       
       next
       
     }
     
-    selector_function("age", age_metadata, i)
+    age_stratification <- remDr$executeScript("text = document.querySelector('#specificAge > label > span'); 
+                                  text_return = text.textContent;
+                                  return text_return") |> 
+      as.character()
+    
+    if (age_stratification == "Select specific age groups" && scraping_tibble$age[i] == "Age - 13 and older") {
+      
+      remDr$executeScript("document.querySelector('#specificAge > label > span').click(); document.querySelectorAll('#specificAgeGroupsList > fieldset > div:nth-child(n+2):nth-child(-n+9) > label').forEach(el => el.click());",
+      )
+      
+    } else {
+      selector_function("age", age_metadata, i)
+    }
     
     race_class <- remDr$executeScript("text = document.querySelector('#wizardQT-p-3 > div > div:nth-child(2) > div > div.panel-body > fieldset > div:nth-child(2)'); 
                                   text_return = text.className;
@@ -517,7 +531,7 @@ for (i in 1:(nrow(scraping_tibble)+1)) {
     
     if (str_detect(race_class, "disabled") == TRUE && scraping_tibble$race[i] != "All Races_Ethnicities") {
       return_metadata[[length(return_metadata) + 1]] <- list(run = i,
-                                                             location = "NA - Stratification not available")
+                                                             location = "NA - Stratification not available (Based on Race)")
       
       next
     }
@@ -541,7 +555,7 @@ for (i in 1:(nrow(scraping_tibble)+1)) {
     
     if (str_detect(sex_class, "disabled") == TRUE && scraping_tibble$sex[i] != "Both Sexes") {
       return_metadata[[length(return_metadata) + 1]] <- list(run = i,
-                                                             location = "NA - Stratification not available")
+                                                             location = "NA - Stratification not available (Based on Sex)")
       
       next
     }
@@ -560,14 +574,36 @@ for (i in 1:(nrow(scraping_tibble)+1)) {
       remDr$executeScript("document.querySelector('#allSexes').click();")
     }
     
+    transmission_visibility <- remDr$executeScript("element = document.querySelector('#divTransCat'); 
+                                  element_return = window.getComputedStyle(element).getPropertyValue('visibility');
+                                  return element_return") |> 
+      as.character()
+    
     transmission_class <- remDr$executeScript("text = document.querySelector('#divTransCat > div > div.panel-body > fieldset > div:nth-child(2)'); 
                                   text_return = text.className;
                                   return text_return") |> 
       as.character()
     
-    if (str_detect(transmission_class, "disabled") == TRUE && scraping_tibble$race[i] != "All Transmission") {
+    transmission_header <- remDr$executeScript("text = document.querySelector('#divTransCat > div > div.panel-heading > span'); 
+                                  text_return = text.textContent;
+                                  return text_return") |> 
+      as.character()
+    
+    if (transmission_header == "Country of birth" && scraping_tibble$transmission[i] != "All Transmission") {
+      
+      remDr$executeScript("document.querySelector('#transcatList > fieldset > div:nth-child(2) > label').click();
+                          document.querySelector('#transcatList > fieldset > div:nth-child(3) > label').click();")
+      
+    } else if (transmission_visibility == "hidden" && scraping_tibble$transmission[i] != "All Transmission") {
       return_metadata[[length(return_metadata) + 1]] <- list(run = i,
-                                                             location = "NA - Stratification not available")
+                                                             location = "NA - Stratification not available (Based on transmission)")
+      
+      next
+      
+    } else if (str_detect(transmission_class, "disabled") == TRUE && scraping_tibble$transmission[i] != "All Transmission") {
+      
+      return_metadata[[length(return_metadata) + 1]] <- list(run = i,
+                                                             location = "NA - Stratification not available (Based on transmission)")
       
       next
     }
@@ -580,8 +616,6 @@ for (i in 1:(nrow(scraping_tibble)+1)) {
   remDr$executeScript("document.querySelector('#wizardQT > div:nth-child(2) > ul > li:nth-child(4) > a').click();")
   
   # Some options prevent a table from ever being generated. Since this throws an error in the console log, detecting an error means we can skip that iteration.
-  
-  Sys.sleep(3)
   
   console_log <- remDr$log("browser") |> 
     as.data.frame()
@@ -615,6 +649,8 @@ for (i in 1:(nrow(scraping_tibble)+1)) {
   
   # Export Button
   Sys.sleep(2)
+  explicit_wait(using = "css selector", element = "#btnExport", timeout = 120, remDr = remDr)
+  
   remDr$executeScript("document.querySelector('#btnExport').click();")
   
   #Waiting for file to download
@@ -671,3 +707,8 @@ return_metadata <- return_metadata |>
   bind_rows()
 
 saveRDS(return_metadata, str_c(here::here("temp"), "/return_metadata_", str_replace_all(ymd_hms(Sys.time()), " |:", "_"), ".RDS"))
+
+test <- readRDS(here::here("temp", "return_metadata_2025-11-10_08_52_28.899986.RDS"))
+
+
+for (i in sample(1:100, 7)) {print(i)}
