@@ -117,9 +117,9 @@ age_metadata <- tibble(
   
   text = c("All ages 13 years and older" , "Age - 13 and older", "Age - 13 to 24", "Age - 50 and older"),
   value = c("document.querySelector('#allAge > label');",
-            "document.querySelector('#specificAge > label > span').click(); document.querySelectorAll('#specificAgeGroupsList > fieldset > div:nth-child(n+2):nth-child(-n+7) > label').forEach(el => el.click());",
-            "document.querySelector('#youngAgeGroup > label').click(); document.querySelectorAll('#youngAgeGroupsList > fieldset > div:nth-child(n+2):nth-child(-n+3) > label').forEach(el => el.click());",
-            "document.querySelector('#olderAgeGroup > label').click(); document.querySelectorAll('#olderAgeGroupsList > fieldset > div:nth-child(n+2):nth-child(-n+9) > label').forEach(el => el.click());")
+            "document.querySelector('#specificAge > label > span').click(); document.querySelectorAll('#specificAgeGroupsList > fieldset > div:nth-child(n) > label').forEach(el => el.click());",
+            "document.querySelector('#youngAgeGroup > label').click(); document.querySelectorAll('#youngAgeGroupsList > fieldset > div:nth-child(n) > label').forEach(el => el.click());",
+            "document.querySelector('#olderAgeGroup > label').click(); document.querySelectorAll('#olderAgeGroupsList > fieldset > div:nth-child(n) > label').forEach(el => el.click());")
   
 )
 
@@ -128,7 +128,7 @@ race_metadata <- tibble(
   text = c("All Races_Ethnicities",
            "Race_Ethnicity"),
   value = c("document.querySelector('#allRaces');",
-            "document.querySelector('#specificRace > label').click(); document.querySelectorAll('#raceList > fieldset > div:nth-child(n+2):nth-child(-n+8) > label').forEach(el => el.click());")
+            "document.querySelector('#specificRace > label').click(); document.querySelectorAll('#raceList > fieldset > div:nth-child(n) > label').forEach(el => el.click());")
   
 )
 
@@ -136,7 +136,7 @@ sex_metadata <- tibble(
   
   text = c("Both Sexes", "Sex - Male", "Sex - Female"),
   value = c("document.querySelector('#allTC');",
-            "document.querySelector('#specificTransCat > label').click(); document.querySelectorAll('#transcatList > fieldset > div:nth-child(n+2):nth-child(-n+6) > label').forEach(el => el.click());", 
+            "document.querySelector('#specificTransCat > label').click(); document.querySelectorAll('#transcatList > fieldset > div:nth-child(n) > label').forEach(el => el.click());", 
             "document.querySelector('#specificTransCat > label').click(); document.querySelector('#transcatList > fieldset > div:nth-child(3) > label').click(); document.querySelector('#transcatList > fieldset > div:nth-child(5) > label').click(); document.querySelector('#transcatList > fieldset > div:nth-child(6) > label').click();")
   
 )
@@ -144,9 +144,9 @@ sex_metadata <- tibble(
 
 transmission_metadata <- tibble(
   
-  text = c("All Transmission", "Male Transmission Options", "Female Transmission Options"),
+  text = c("All Transmission", "Stratified Transmission Options", "Stratified Transmission Options (Female)"),
   value = c("document.querySelector('#divTransCat > div > div.panel-body > fieldset > div:nth-child(2) > label');",
-            "document.querySelector('#specificTransCat > label').click(); document.querySelectorAll('#transcatList > fieldset > div:nth-child(n+2):nth-child(-n+6) > label').forEach(el => el.click());", 
+            "document.querySelector('#specificTransCat > label').click(); document.querySelectorAll('#transcatList > fieldset > div:nth-child(n) > label').forEach(el => el.click());", 
             "document.querySelector('#specificTransCat > label').click(); document.querySelector('#transcatList > fieldset > div:nth-child(3) > label').click(); document.querySelector('#transcatList > fieldset > div:nth-child(5) > label').click(); document.querySelector('#transcatList > fieldset > div:nth-child(6) > label').click();")
   
 )
@@ -305,24 +305,12 @@ explicit_wait_reverse <- function(using, element, timeout, remDr) {
   
   repeat{
     
-    # Setting check to TRUE. If the error does not happen then it should not change.
-    check <- FALSE
-    
     # Calculating the runtime 
     runtime <- Sys.time() - before_time
     
-    tryCatch({
-      
-      return_element <- remDr$findElement(using = using,
-                                          value = element)
-      
-      
-    },
-    error = function(e){
-      
-      check <<- TRUE # <<- searches for a variable named "check" throughout parent scopes and changes it.
-      
-    })
+    check <- remDr$executeScript(str_c("element = document.querySelector('#body > div.blockUI.blockMsg.blockPage');
+                      if (element) {return 'FALSE'} else {return 'TRUE'}; ")) |> 
+      as.logical()
     
     if(check == TRUE) {
       
@@ -347,12 +335,14 @@ chrome_prefs <- list(
   "download.prompt_for_download" = FALSE,
   "download.directory_upgrade" = TRUE,
   "safebrowsing.enabled" = TRUE,
+  'unexpectedAlertBehaviour' = 'accept',
   "profile.default_content_setting_values.automatic_downloads" = 1 # Allows chrome to download multiple files from the same site in one session
 )
 
 
 eCaps <- list(chromeOptions = list(
   # args = c('--headless', '--disable-gpu', '--no-sandbox'),
+  args = c('--disable-popup-blocking', '--disable-notifications'),
   prefs = chrome_prefs
 ))
 
@@ -360,18 +350,20 @@ eCaps <- list(chromeOptions = list(
 # Filtering scraping tibble to remove redundancies and impossibilities for sex and transmission;
 
 scraping_tibble <- scraping_tibble |> 
-  filter(case_when(sex == "Both Sexes" & transmission == "Female Transmission Options" ~ FALSE,
-                   sex == "Sex - Male" & transmission == "Female Transmission Options" ~ FALSE,
-                   sex == "Sex - Female" & transmission == "Male Transmission Options" ~ FALSE,
+  filter(case_when(sex == "Both Sexes" & transmission == "Stratified Transmission Options (Female)" ~ FALSE,
+                   sex == "Sex - Male" & transmission == "Stratified Transmission Options (Female)" ~ FALSE,
+                   sex == "Sex - Female" & transmission == "Stratified Transmission Options" ~ FALSE,
                    TRUE ~ TRUE))
 
 ## EXAMINE 961
 
-for (i in 1:(nrow(scraping_tibble)+1)) {
+# 1:(nrow(scraping_tibble)+1)
+
+for (i in sample(1:(nrow(scraping_tibble)), 3)) {
   
   print(i)
   
-  if (i == 1) {
+  if (i == 99999) {
     
     timer <- timeR::createTimer()
     
@@ -383,13 +375,13 @@ for (i in 1:(nrow(scraping_tibble)+1)) {
                        extraCapabilities = eCaps,
                        check = FALSE)
     
-    remDr<- driver$client
+    remDr <- driver$client
     
-    remDr$setTimeout(type="script", 100000)
+    remDr$setTimeout(type="script", 10000000)
     
   }
   
-  if (i == (nrow(scraping_tibble)+1)) {
+  if (i == 99999) {
     
     # This is at the top so that if the last iteration gets skipped, then this still trips.
     
@@ -407,7 +399,18 @@ for (i in 1:(nrow(scraping_tibble)+1)) {
   
   console_log <- list()
   
+  # I'm not actually sure if this (clearing cookies) will impact anything, but I suspect it will help.
+  
+  remDr$deleteAllCookies()
+  
   remDr$navigate("https://gis.cdc.gov/grasp/nchhstpatlas/tables.html")
+  
+  # Sometimes an alert window will be thrown and can halt script execution.
+  # This stops alert windows from appearing.
+  
+  remDr$executeScript("window.alert = function() {};
+                      window.confirm = function() {return true;};
+                      window.prompt = function() {return '';};")
   
   # Waiting for page to load
   repeat{
@@ -517,11 +520,11 @@ for (i in 1:(nrow(scraping_tibble)+1)) {
     
     if (age_stratification == "Select specific age groups" && scraping_tibble$age[i] == "Age - 13 and older") {
       
-      remDr$executeScript("document.querySelector('#specificAge > label > span').click(); document.querySelectorAll('#specificAgeGroupsList > fieldset > div:nth-child(n+2):nth-child(-n+9) > label').forEach(el => el.click());",
+      remDr$executeScript("document.querySelector('#specificAge > label > span').click(); document.querySelectorAll('#specificAgeGroupsList > fieldset > div:nth-child(n+2):nth-child(-n+999) > label').forEach(el => el.click());",
       )
       
     } else {
-      selector_function("age", age_metadata, i)
+      selector_function("age", age_metadata, 1070)
     }
     
     race_class <- remDr$executeScript("text = document.querySelector('#wizardQT-p-3 > div > div:nth-child(2) > div > div.panel-body > fieldset > div:nth-child(2)'); 
@@ -617,8 +620,12 @@ for (i in 1:(nrow(scraping_tibble)+1)) {
   
   # Some options prevent a table from ever being generated. Since this throws an error in the console log, detecting an error means we can skip that iteration.
   
+  Sys.sleep(3)
+  
   console_log <- remDr$log("browser") |> 
     as.data.frame()
+  
+  Sys.sleep(1)
   
   if (nrow(console_log) != 0) {
     return_metadata[[length(return_metadata) + 1]] <- list(run = i,
@@ -631,6 +638,44 @@ for (i in 1:(nrow(scraping_tibble)+1)) {
   
   # Waiting for table to be created
   explicit_wait_reverse(using = "css selector", element = "body > div.blockUI.blockMsg.blockPage", timeout = 300, remDr = remDr)
+  
+  # Skipping iteration if an error is thrown (Logged text is the same as the error that pops up)
+  
+  query_error <- remDr$executeScript("element = document.querySelector('#alertModal > div > div > div.modal-header.modal-header-warning');
+                      if (element) {return 'TRUE'} else {return 'FALSE'}; ") |> 
+    as.logical()
+  
+  if (query_error == TRUE) {
+    return_metadata[[length(return_metadata) + 1]] <- list(run = i,
+                                                           location = "Error: No data found matching query criteria.")
+    
+    next
+  }
+  
+  explicit_wait(using = "css selector",
+                element = "#pivotTable_info",
+                remDr = remDr,
+                timeout = 300)
+  
+  # Skipping tables with more than 200,000 rows as these tend to break the website. 
+  # I am planning to circle back, but I want to keep the downloads moving along.
+  
+  table_size <- remDr$executeScript("element = document.querySelector('#pivotTable_info');
+                                  text = element.textContent;
+                                  return text;") |> 
+    as.character() |> 
+    str_replace(",", "") |> 
+    str_extract_all("\\d+(?!.*\\d)") |> 
+    unlist() |> 
+    as.integer()
+  
+  if (table_size >200000) {
+    
+    return_metadata[[length(return_metadata) + 1]] <- list(run = i,
+                                                           location = str_c("Error: Table was too large (", table_size, " rows)"))
+    
+    next
+  }
   
   
   # Underlying Data Button
@@ -689,7 +734,7 @@ for (i in 1:(nrow(scraping_tibble)+1)) {
   #Waiting until file is in its proper location
   repeat{
     if (file.exists(str_c(file_path, "/", "AtlasPlusTableData_", i ,".csv")) == TRUE) {
-      Sys.sleep(1)
+      Sys.sleep(5)
       break
     } else {
       Sys.sleep(1)
@@ -703,12 +748,13 @@ for (i in 1:(nrow(scraping_tibble)+1)) {
   
 }
 
+
 return_metadata <- return_metadata |>
   bind_rows()
 
 saveRDS(return_metadata, str_c(here::here("temp"), "/return_metadata_", str_replace_all(ymd_hms(Sys.time()), " |:", "_"), ".RDS"))
 
-test <- readRDS(here::here("temp", "return_metadata_2025-11-10_08_52_28.899986.RDS"))
+test <- readRDS(here::here("temp", "return_metadata_2025-11-14_22_56_52.247803.RDS"))
 
 
 for (i in sample(1:100, 7)) {print(i)}
