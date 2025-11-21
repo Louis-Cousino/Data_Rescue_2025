@@ -4,37 +4,26 @@
 
 
 
-explicit_wait <- function(using, element, timeout, remDr) {
+explicit_wait <- function(element, timeout, remDr, reverse = "n") {
   
   before_time <- Sys.time()
   
   repeat{
     
-    # Setting check to TRUE. If the error does not happen then it should not change.
-    check <- TRUE
-    
     # Calculating the runtime 
     runtime <- Sys.time() - before_time
     
-    tryCatch({
-      
-      return_element <- remDr$findElement(using = using,
-                                          value = element)
-      
-    },
-    error = function(e){
-      
-      print("Could Not Find Element")
-      
-      check <<- FALSE # <<- searches for a variable named "check" throughout parent scopes and changes it.
-      
-    })
+    check <- remDr$executeScript(stringr::str_c("element = document.querySelector('", element, "');
+                      if (element) {return 'TRUE'} else {return 'FALSE'}; ")) |> 
+      as.logical()
+    
+    if (reverse == "y") {check <- !check}
     
     if(check == TRUE) {
       
       Sys.sleep(1)
       
-      return(return_element)
+      break
       
     } else if (runtime > timeout) {
       

@@ -230,7 +230,7 @@ scraping_tibble <- master_tibble |>
 # 12. Repeat steps 2-11 until finished
 
 
-selector_function <- function(column, selector_table, num) {
+selector_function <- function(column, selector_table, num, remDr) {
   
   section <- eval(parse(text = str_c("scraping_tibble$", column, "[", num, "]")))
   
@@ -298,55 +298,6 @@ JS_explicit_wait <- function(script, mode = c("text", "element"), timeout, remDr
   }
 }
 
-# Running the explicit wait in reverse for checking if the table has been generated
-explicit_wait_reverse <- function(using, element, timeout, remDr) {
-  
-  before_time <- Sys.time()
-  
-  repeat{
-    
-    # Calculating the runtime 
-    runtime <- Sys.time() - before_time
-    
-    check <- remDr$executeScript(str_c("element = document.querySelector('#body > div.blockUI.blockMsg.blockPage');
-                      if (element) {return 'FALSE'} else {return 'TRUE'}; ")) |> 
-      as.logical()
-    
-    if(check == TRUE) {
-      
-      Sys.sleep(1)
-      
-      break
-      
-    } else if (runtime > timeout) {
-      
-      stop(str_c("Error: Explicit wait reached a timeout of ", timeout, " seconds."))
-      
-    }
-    
-    Sys.sleep(1)
-    
-  }
-}
-
-next_btn <- "document.querySelector('#wizardQT > div:nth-child(2) > ul > li:nth-child(3) > a').click();"
-
-chrome_prefs <- list(
-  "download.prompt_for_download" = FALSE,
-  "download.directory_upgrade" = TRUE,
-  "safebrowsing.enabled" = TRUE,
-  'unexpectedAlertBehaviour' = 'accept',
-  "profile.default_content_setting_values.automatic_downloads" = 1 # Allows chrome to download multiple files from the same site in one session
-)
-
-
-eCaps <- list(chromeOptions = list(
-  # args = c('--headless', '--disable-gpu', '--no-sandbox'),
-  args = c('--disable-popup-blocking', '--disable-notifications'),
-  prefs = chrome_prefs
-))
-
-
 # Filtering scraping tibble to remove redundancies and impossibilities for sex and transmission;
 
 scraping_tibble <- scraping_tibble |> 
@@ -359,31 +310,9 @@ scraping_tibble <- scraping_tibble |>
 
 # 1:(nrow(scraping_tibble)+1)
 
-for (i in sample(1:(nrow(scraping_tibble)), 3)) {
+atlas_scraper <- function (from, to, ...) {
   
-  print(i)
-  
-  if (i == 99999) {
-    
-    timer <- timeR::createTimer()
-    
-    timer$start("AltasPlus Run")
-    
-    return_metadata <- list()
-    
-    driver <- rsDriver(verbose = F, port=netstat::free_port(),
-                       extraCapabilities = eCaps,
-                       check = FALSE)
-    
-    remDr <- driver$client
-    
-    remDr$setTimeout(type="script", 10000000)
-    
-  }
-  
-  if (i == 99999) {
-    
-    # This is at the top so that if the last iteration gets skipped, then this still trips.
+  on.exit({
     
     # Closing RSelenium
     
@@ -393,366 +322,404 @@ for (i in sample(1:(nrow(scraping_tibble)), 3)) {
     
     timer$stop("AltasPlus Run")
     
-    break
+    return_metadata <- return_metadata |>
+      bind_rows()
     
-  }
+    saveRDS(return_metadata, str_c(here::here("temp"), "/return_metadata_", str_replace_all(ymd_hms(Sys.time()), " |:", "_"), ".RDS"))
+  }, add = TRUE)
   
-  console_log <- list()
+  next_btn <- "document.querySelector('#wizardQT > div:nth-child(2) > ul > li:nth-child(3) > a').click();"
   
-  # I'm not actually sure if this (clearing cookies) will impact anything, but I suspect it will help.
+  chrome_prefs <- list(
+    "download.prompt_for_download" = FALSE,
+    "download.directory_upgrade" = TRUE,
+    "safebrowsing.enabled" = TRUE,
+    'unexpectedAlertBehaviour' = 'accept',
+    "profile.default_content_setting_values.automatic_downloads" = 1 # Allows chrome to download multiple files from the same site in one session
+  )
   
-  remDr$deleteAllCookies()
   
-  remDr$navigate("https://gis.cdc.gov/grasp/nchhstpatlas/tables.html")
+  eCaps <- list(chromeOptions = list(
+    # args = c('--headless', '--disable-gpu', '--no-sandbox'),
+    args = c('--disable-popup-blocking', '--disable-notifications'),
+    prefs = chrome_prefs
+  ))
   
-  # Sometimes an alert window will be thrown and can halt script execution.
-  # This stops alert windows from appearing.
+  timer <- timeR::createTimer()
   
-  remDr$executeScript("window.alert = function() {};
+  timer$start("AltasPlus Run")
+  
+  return_metadata <- list()
+  
+  driver <- rsDriver(verbose = F, port=netstat::free_port(),
+                     extraCapabilities = eCaps,
+                     check = FALSE)
+  
+  remDr <- driver$client
+  
+  remDr$setTimeout(type="script", 10000000)
+  
+  for (i in to:from) {
+    
+    print(i)
+
+    console_log <- list()
+    
+    # I'm not actually sure if this (clearing cookies) will impact anything, but I suspect it will help.
+    
+    remDr$deleteAllCookies()
+    
+    remDr$navigate("https://gis.cdc.gov/grasp/nchhstpatlas/tables.html")
+    
+    # Sometimes an alert window will be thrown and can halt script execution.
+    # This stops alert windows from appearing.
+    
+    remDr$executeScript("window.alert = function() {};
                       window.confirm = function() {return true;};
                       window.prompt = function() {return '';};")
-  
-  # Waiting for page to load
-  repeat{
-    if(remDr$executeScript("return document.readyState == 'complete';")[[1]] == TRUE) {
-      Sys.sleep(1)
-      break
-    } else {
-      Sys.sleep(1)
-    }
-  }
-  
-  indicator <- scraping_tibble[i, ] |> 
-    mutate(indicator = str_replace_all(indicator, "\\*|\\^|\\‡", ""),
-           indicator = str_trim(indicator)) |> 
-    pull(indicator)
-  
-  indicator_list <- indicator_metadata |> 
-    mutate(text = str_replace_all(text, "\\*|\\^|\\‡", ""),
-           text = str_trim(text)) |> 
-    pull(text) |> 
-    str_c(collapse = "|")
-  
-  # Indicator Section
-  JS_explicit_wait(script = "text = document.querySelector('#wizardQT-p-0'); 
-                                  text_return = window.getComputedStyle(text).display;
-                                  return text_return",
-                   mode = "text", 30, remDr = remDr)
-  
-  selector_function("indicator", indicator_metadata, i)
-  
-  # Next Button
-  remDr$executeScript(next_btn)
-  
-  # Geography Section
-  JS_explicit_wait(script = "text = document.querySelector('#wizardQT-p-1'); 
-                                  text_return = window.getComputedStyle(text).display;
-                                  return text_return",
-                   mode = "text", 30, remDr = remDr)
-  
-  selector_function("geography", geo_metadata, i)
-  
-  # Next Button
-  remDr$executeScript(next_btn)
-  
-  # Year Selection
-  JS_explicit_wait(script = "text = document.querySelector('#wizardQT-p-2'); 
-                                  text_return = window.getComputedStyle(text).display;
-                                  return text_return",
-                   mode = "text", 30, remDr = remDr)
-  
-  remDr$executeScript(as.character(year_metadata[2]))
-  
-  # Next Button
-  remDr$executeScript(next_btn)
-  
-  # Demographic Selection (If needed)
-  
-  if (str_detect(indicator, str_c(indicator_list)) == TRUE) {
     
-    JS_explicit_wait(script = "text = document.querySelector('#wizardQT-p-3'); 
+    # Waiting for page to load
+    repeat{
+      if(remDr$executeScript("return document.readyState == 'complete';")[[1]] == TRUE) {
+        Sys.sleep(1)
+        break
+      } else {
+        Sys.sleep(1)
+      }
+    }
+    
+    indicator <- scraping_tibble[i, ] |> 
+      mutate(indicator = str_replace_all(indicator, "\\*|\\^|\\‡", ""),
+             indicator = str_trim(indicator)) |> 
+      pull(indicator)
+    
+    indicator_list <- indicator_metadata |> 
+      mutate(text = str_replace_all(text, "\\*|\\^|\\‡", ""),
+             text = str_trim(text)) |> 
+      pull(text) |> 
+      str_c(collapse = "|")
+    
+    # Indicator Section
+    JS_explicit_wait(script = "text = document.querySelector('#wizardQT-p-0'); 
                                   text_return = window.getComputedStyle(text).display;
                                   return text_return",
                      mode = "text", 30, remDr = remDr)
     
-    younger_age_option <- remDr$executeScript("text = document.querySelector('#youngAgeGroup'); 
+    selector_function("indicator", indicator_metadata, i, remDr)
+    
+    # Next Button
+    remDr$executeScript(next_btn)
+    
+    # Geography Section
+    JS_explicit_wait(script = "text = document.querySelector('#wizardQT-p-1'); 
+                                  text_return = window.getComputedStyle(text).display;
+                                  return text_return",
+                     mode = "text", 30, remDr = remDr)
+    
+    selector_function("geography", geo_metadata, i, remDr)
+    
+    # Next Button
+    remDr$executeScript(next_btn)
+    
+    # Year Selection
+    JS_explicit_wait(script = "text = document.querySelector('#wizardQT-p-2'); 
+                                  text_return = window.getComputedStyle(text).display;
+                                  return text_return",
+                     mode = "text", 30, remDr = remDr)
+    
+    remDr$executeScript(as.character(year_metadata[2]))
+    
+    # Next Button
+    remDr$executeScript(next_btn)
+    
+    # Demographic Selection (If needed)
+    
+    if (str_detect(indicator, str_c(indicator_list)) == TRUE) {
+      
+      JS_explicit_wait(script = "text = document.querySelector('#wizardQT-p-3'); 
+                                  text_return = window.getComputedStyle(text).display;
+                                  return text_return",
+                       mode = "text", 30, remDr = remDr)
+      
+      younger_age_option <- remDr$executeScript("text = document.querySelector('#youngAgeGroup'); 
                                   text_return = window.getComputedStyle(text).display;
                                   return text_return") |> 
-      as.character()
-    
-    older_age_option <- remDr$executeScript("text = document.querySelector('#youngAgeGroup'); 
+        as.character()
+      
+      older_age_option <- remDr$executeScript("text = document.querySelector('#youngAgeGroup'); 
                                   text_return = window.getComputedStyle(text).display;
                                   return text_return") |> 
-      as.character()
-    
-    age_class <- remDr$executeScript("text = document.querySelector('#allAge'); 
+        as.character()
+      
+      age_class <- remDr$executeScript("text = document.querySelector('#allAge'); 
                                   text_return = text.className;
                                   return text_return") |> 
-      as.character()
-    
-    if (str_detect(age_class, "disabled") == TRUE && scraping_tibble$age[i] != "All ages 13 years and older") {
-      return_metadata[[length(return_metadata) + 1]] <- list(run = i,
-                                                             location = "NA - Stratification not available (Based on Age)")
+        as.character()
       
-      next
-    }
-    
-    if (younger_age_option == "none" && scraping_tibble$age[i] == "Age - 13 to 24") {
+      if (str_detect(age_class, "disabled") == TRUE && scraping_tibble$age[i] != "All ages 13 years and older") {
+        return_metadata[[length(return_metadata) + 1]] <- list(run = i,
+                                                               location = "NA - Stratification not available (Based on Age)")
+        
+        next
+      }
       
-      return_metadata[[length(return_metadata) + 1]] <- list(run = i,
-                                                             location = "NA - Stratification not available (Based on Young Age)")
+      if (younger_age_option == "none" && scraping_tibble$age[i] == "Age - 13 to 24") {
+        
+        return_metadata[[length(return_metadata) + 1]] <- list(run = i,
+                                                               location = "NA - Stratification not available (Based on Young Age)")
+        
+        next
+        
+      } else if (older_age_option == "none" && scraping_tibble$age[i] == "Age - 50 and older") {
+        
+        return_metadata[[length(return_metadata) + 1]] <- list(run = i,
+                                                               location = "NA - Stratification not available (Based on Old Age)")
+        
+        next
+        
+      }
       
-      next
-      
-    } else if (older_age_option == "none" && scraping_tibble$age[i] == "Age - 50 and older") {
-      
-      return_metadata[[length(return_metadata) + 1]] <- list(run = i,
-                                                             location = "NA - Stratification not available (Based on Old Age)")
-      
-      next
-      
-    }
-    
-    age_stratification <- remDr$executeScript("text = document.querySelector('#specificAge > label > span'); 
+      age_stratification <- remDr$executeScript("text = document.querySelector('#specificAge > label > span'); 
                                   text_return = text.textContent;
                                   return text_return") |> 
-      as.character()
-    
-    if (age_stratification == "Select specific age groups" && scraping_tibble$age[i] == "Age - 13 and older") {
+        as.character()
       
-      remDr$executeScript("document.querySelector('#specificAge > label > span').click(); document.querySelectorAll('#specificAgeGroupsList > fieldset > div:nth-child(n+2):nth-child(-n+999) > label').forEach(el => el.click());",
-      )
+      if (age_stratification == "Select specific age groups" && scraping_tibble$age[i] == "Age - 13 and older") {
+        
+        remDr$executeScript("document.querySelector('#specificAge > label > span').click(); document.querySelectorAll('#specificAgeGroupsList > fieldset > div:nth-child(n+2):nth-child(-n+999) > label').forEach(el => el.click());",
+        )
+        
+      } else {
+        selector_function("age", age_metadata, i, remDr)
+      }
       
-    } else {
-      selector_function("age", age_metadata, 1070)
-    }
-    
-    race_class <- remDr$executeScript("text = document.querySelector('#wizardQT-p-3 > div > div:nth-child(2) > div > div.panel-body > fieldset > div:nth-child(2)'); 
+      race_class <- remDr$executeScript("text = document.querySelector('#wizardQT-p-3 > div > div:nth-child(2) > div > div.panel-body > fieldset > div:nth-child(2)'); 
                                   text_return = text.className;
                                   return text_return") |> 
-      as.character()
-    
-    if (str_detect(race_class, "disabled") == TRUE && scraping_tibble$race[i] != "All Races_Ethnicities") {
-      return_metadata[[length(return_metadata) + 1]] <- list(run = i,
-                                                             location = "NA - Stratification not available (Based on Race)")
+        as.character()
       
-      next
-    }
-    
-    selector_function("race", race_metadata, i)
-    
-    # Selecting different options for sex based on what panel is shown (there's two :/ )
-    
-    sex <- scraping_tibble$sex[i]
-    
-    sex_option <- remDr$executeScript("text = document.querySelector('#sex_panel'); 
+      if (str_detect(race_class, "disabled") == TRUE && scraping_tibble$race[i] != "All Races_Ethnicities") {
+        return_metadata[[length(return_metadata) + 1]] <- list(run = i,
+                                                               location = "NA - Stratification not available (Based on Race)")
+        
+        next
+      }
+      
+      selector_function("race", race_metadata, i, remDr)
+      
+      # Selecting different options for sex based on what panel is shown (there's two :/ )
+      
+      sex <- scraping_tibble$sex[i]
+      
+      sex_option <- remDr$executeScript("text = document.querySelector('#sex_panel'); 
                                   text_return = window.getComputedStyle(text).display;
                                   return text_return") |> 
-      as.character()
-    
-    sex_class <- remDr$executeScript("text = document.querySelector('#sex_panel > div.panel-body > fieldset > div:nth-child(2)'); 
+        as.character()
+      
+      sex_class <- remDr$executeScript("text = document.querySelector('#sex_panel > div.panel-body > fieldset > div:nth-child(2)'); 
                                   text_return = text.className;
                                   return text_return") |> 
-      as.character()
-    
-    
-    if (str_detect(sex_class, "disabled") == TRUE && scraping_tibble$sex[i] != "Both Sexes") {
-      return_metadata[[length(return_metadata) + 1]] <- list(run = i,
-                                                             location = "NA - Stratification not available (Based on Sex)")
+        as.character()
       
-      next
-    }
-    
-    if (sex_option == "none" && sex == "Sex - Male") {
-      remDr$executeScript("document.querySelector('#genderListSex > fieldset > div:nth-child(3) > label').click();")
-    } else if (sex_option == "none" && sex == "Sex - Female") {
-      remDr$executeScript("document.querySelector('#genderListSex > fieldset > div:nth-child(4) > label').click();")
-    } else if (sex_option == "none" && sex == "Both Sexes") {
-      remDr$executeScript("document.querySelector('#genderListSex > fieldset > div:nth-child(2) > label');")
-    } else if(sex_option != "none" && sex == "Sex - Male") {
-      remDr$executeScript("document.querySelector('#sexList > fieldset > div:nth-child(2) > label').click();")
-    } else if (sex_option != "none" && sex == "Sex - Female") {
-      remDr$executeScript("document.querySelector('#sexList > fieldset > div:nth-child(3) > label').click();")
-    } else if (sex_option != "none" && sex == "Both Sexes") {
-      remDr$executeScript("document.querySelector('#allSexes').click();")
-    }
-    
-    transmission_visibility <- remDr$executeScript("element = document.querySelector('#divTransCat'); 
+      
+      if (str_detect(sex_class, "disabled") == TRUE && scraping_tibble$sex[i] != "Both Sexes") {
+        return_metadata[[length(return_metadata) + 1]] <- list(run = i,
+                                                               location = "NA - Stratification not available (Based on Sex)")
+        
+        next
+      }
+      
+      if (sex_option == "none" && sex == "Sex - Male") {
+        remDr$executeScript("document.querySelector('#genderListSex > fieldset > div:nth-child(3) > label').click();")
+      } else if (sex_option == "none" && sex == "Sex - Female") {
+        remDr$executeScript("document.querySelector('#genderListSex > fieldset > div:nth-child(4) > label').click();")
+      } else if (sex_option == "none" && sex == "Both Sexes") {
+        remDr$executeScript("document.querySelector('#genderListSex > fieldset > div:nth-child(2) > label');")
+      } else if(sex_option != "none" && sex == "Sex - Male") {
+        remDr$executeScript("document.querySelector('#sexList > fieldset > div:nth-child(2) > label').click();")
+      } else if (sex_option != "none" && sex == "Sex - Female") {
+        remDr$executeScript("document.querySelector('#sexList > fieldset > div:nth-child(3) > label').click();")
+      } else if (sex_option != "none" && sex == "Both Sexes") {
+        remDr$executeScript("document.querySelector('#allSexes').click();")
+      }
+      
+      transmission_visibility <- remDr$executeScript("element = document.querySelector('#divTransCat'); 
                                   element_return = window.getComputedStyle(element).getPropertyValue('visibility');
                                   return element_return") |> 
-      as.character()
-    
-    transmission_class <- remDr$executeScript("text = document.querySelector('#divTransCat > div > div.panel-body > fieldset > div:nth-child(2)'); 
+        as.character()
+      
+      transmission_class <- remDr$executeScript("text = document.querySelector('#divTransCat > div > div.panel-body > fieldset > div:nth-child(2)'); 
                                   text_return = text.className;
                                   return text_return") |> 
-      as.character()
-    
-    transmission_header <- remDr$executeScript("text = document.querySelector('#divTransCat > div > div.panel-heading > span'); 
+        as.character()
+      
+      transmission_header <- remDr$executeScript("text = document.querySelector('#divTransCat > div > div.panel-heading > span'); 
                                   text_return = text.textContent;
                                   return text_return") |> 
-      as.character()
-    
-    if (transmission_header == "Country of birth" && scraping_tibble$transmission[i] != "All Transmission") {
+        as.character()
       
-      remDr$executeScript("document.querySelector('#transcatList > fieldset > div:nth-child(2) > label').click();
+      if (transmission_header == "Country of birth" && scraping_tibble$transmission[i] != "All Transmission") {
+        
+        remDr$executeScript("document.querySelector('#transcatList > fieldset > div:nth-child(2) > label').click();
                           document.querySelector('#transcatList > fieldset > div:nth-child(3) > label').click();")
+        
+      } else if (transmission_visibility == "hidden" && scraping_tibble$transmission[i] != "All Transmission") {
+        return_metadata[[length(return_metadata) + 1]] <- list(run = i,
+                                                               location = "NA - Stratification not available (Based on transmission)")
+        
+        next
+        
+      } else if (str_detect(transmission_class, "disabled") == TRUE && scraping_tibble$transmission[i] != "All Transmission") {
+        
+        return_metadata[[length(return_metadata) + 1]] <- list(run = i,
+                                                               location = "NA - Stratification not available (Based on transmission)")
+        
+        next
+      }
       
-    } else if (transmission_visibility == "hidden" && scraping_tibble$transmission[i] != "All Transmission") {
-      return_metadata[[length(return_metadata) + 1]] <- list(run = i,
-                                                             location = "NA - Stratification not available (Based on transmission)")
+      selector_function("transmission", transmission_metadata, i, remDr)
       
-      next
-      
-    } else if (str_detect(transmission_class, "disabled") == TRUE && scraping_tibble$transmission[i] != "All Transmission") {
-      
-      return_metadata[[length(return_metadata) + 1]] <- list(run = i,
-                                                             location = "NA - Stratification not available (Based on transmission)")
-      
-      next
     }
     
-    selector_function("transmission", transmission_metadata, i)
+    # Creating Table
+    remDr$executeScript("document.querySelector('#wizardQT > div:nth-child(2) > ul > li:nth-child(4) > a').click();")
     
-  }
-  
-  # Creating Table
-  remDr$executeScript("document.querySelector('#wizardQT > div:nth-child(2) > ul > li:nth-child(4) > a').click();")
-  
-  # Some options prevent a table from ever being generated. Since this throws an error in the console log, detecting an error means we can skip that iteration.
-  
-  Sys.sleep(3)
-  
-  console_log <- remDr$log("browser") |> 
-    as.data.frame()
-  
-  Sys.sleep(1)
-  
-  if (nrow(console_log) != 0) {
-    return_metadata[[length(return_metadata) + 1]] <- list(run = i,
-                                                           location = "NA - Stratification not available. An error was thrown")
+    # Some options prevent a table from ever being generated. Since this throws an error in the console log, detecting an error means we can skip that iteration.
+    
+    Sys.sleep(3)
+    
+    console_log <- remDr$log("browser") |> 
+      as.data.frame()
     
     Sys.sleep(1)
     
-    next
-  }
-  
-  # Waiting for table to be created
-  explicit_wait_reverse(using = "css selector", element = "body > div.blockUI.blockMsg.blockPage", timeout = 300, remDr = remDr)
-  
-  # Skipping iteration if an error is thrown (Logged text is the same as the error that pops up)
-  
-  query_error <- remDr$executeScript("element = document.querySelector('#alertModal > div > div > div.modal-header.modal-header-warning');
-                      if (element) {return 'TRUE'} else {return 'FALSE'}; ") |> 
-    as.logical()
-  
-  if (query_error == TRUE) {
-    return_metadata[[length(return_metadata) + 1]] <- list(run = i,
-                                                           location = "Error: No data found matching query criteria.")
+    if (nrow(console_log) != 0) {
+      return_metadata[[length(return_metadata) + 1]] <- list(run = i,
+                                                             location = "NA - Stratification not available. An error was thrown")
+      
+      Sys.sleep(1)
+      
+      next
+    }
     
-    next
-  }
-  
-  explicit_wait(using = "css selector",
-                element = "#pivotTable_info",
-                remDr = remDr,
-                timeout = 300)
-  
-  # Skipping tables with more than 200,000 rows as these tend to break the website. 
-  # I am planning to circle back, but I want to keep the downloads moving along.
-  
-  table_size <- remDr$executeScript("element = document.querySelector('#pivotTable_info');
+    # Waiting for table to be created
+    explicit_wait(element = "#body > div.blockUI.blockMsg.blockPage",
+                  remDr = remDr,
+                  timeout = 300,
+                  reverse = "y")
+    
+    # Skipping iteration if an error is thrown (Logged text is the same as the error that pops up)
+    
+    query_error <- remDr$executeScript("element = document.querySelector('#alertModal > div > div > div.modal-header.modal-header-warning');
+                      if (element) {return 'TRUE'} else {return 'FALSE'}; ") |> 
+      as.logical()
+    
+    if (query_error == TRUE) {
+      return_metadata[[length(return_metadata) + 1]] <- list(run = i,
+                                                             location = "Error: No data found matching query criteria.")
+      
+      next
+    }
+    
+    explicit_wait(element = "#pivotTable_info",
+                  remDr = remDr,
+                  timeout = 300)
+    
+    # Skipping tables with more than 200,000 rows as these tend to break the website. 
+    # I am planning to circle back, but I want to keep the downloads moving along.
+    
+    table_size <- remDr$executeScript("element = document.querySelector('#pivotTable_info');
                                   text = element.textContent;
                                   return text;") |> 
-    as.character() |> 
-    str_replace(",", "") |> 
-    str_extract_all("\\d+(?!.*\\d)") |> 
-    unlist() |> 
-    as.integer()
-  
-  if (table_size >200000) {
+      as.character() |> 
+      str_replace(",", "") |> 
+      str_extract_all("\\d+(?!.*\\d)") |> 
+      unlist() |> 
+      as.integer()
     
-    return_metadata[[length(return_metadata) + 1]] <- list(run = i,
-                                                           location = str_c("Error: Table was too large (", table_size, " rows)"))
+    if (table_size >200000) {
+      
+      return_metadata[[length(return_metadata) + 1]] <- list(run = i,
+                                                             location = str_c("Error: Table was too large (", table_size, " rows)"))
+      
+      next
+    }
     
-    next
-  }
-  
-  
-  # Underlying Data Button
-  Sys.sleep(2)
-  remDr$executeScript("document.querySelector('#btnResult').click();")
-  
-  # Checking if there is an option to select cases or rates. If there is, then we click it to get the maximum amount of data possible
-  tbl_form <- remDr$executeScript("text = document.querySelector('#btnRateCases'); 
+    
+    # Underlying Data Button
+    Sys.sleep(2)
+    remDr$executeScript("document.querySelector('#btnResult').click();")
+    
+    # Checking if there is an option to select cases or rates. If there is, then we click it to get the maximum amount of data possible
+    tbl_form <- remDr$executeScript("text = document.querySelector('#btnRateCases'); 
                                   text_return = window.getComputedStyle(text).display;
                                   return text_return") |> 
-    as.character()
-  
-  if (tbl_form != "none") {remDr$executeScript("document.querySelector('#btnResult').click();")}
-  
-  
-  
-  # Export Button
-  Sys.sleep(2)
-  explicit_wait(using = "css selector", element = "#btnExport", timeout = 120, remDr = remDr)
-  
-  remDr$executeScript("document.querySelector('#btnExport').click();")
-  
-  #Waiting for file to download
-  
-  download_fail <- FALSE
-  
-  tryCatch({
+      as.character()
     
-    download_timeout <- 300
+    if (tbl_form != "none") {remDr$executeScript("document.querySelector('#btnResult').click();")}
     
-    download_check(download_dir, timeout = download_timeout)
     
-  },
-  error = function(e){
     
-    download_fail <<- TRUE
+    # Export Button
+    Sys.sleep(2)
+    explicit_wait(element = "#btnExport", timeout = 120, remDr = remDr)
     
-  })
-  
-  if (download_fail == TRUE) {
+    remDr$executeScript("document.querySelector('#btnExport').click();")
+    
+    #Waiting for file to download
+    
+    download_fail <- FALSE
+    
+    tryCatch({
+      
+      download_timeout <- 300
+      
+      download_check(download_dir, timeout = download_timeout)
+      
+    },
+    error = function(e){
+      
+      download_fail <<- TRUE
+      
+    })
+    
+    if (download_fail == TRUE) {
+      
+      return_metadata[[length(return_metadata) + 1]] <- list(run = i,
+                                                             location = str_c("Error: File was not downloaded before the timeout occured (", download_timeout, " seconds)"))
+      
+      next
+      
+    }
+    
+    
+    # Creating directory for file location
+    file_path <- directory_creator(here::here("temp"), indicator, scraping_tibble$geography[i], scraping_tibble$race[i], scraping_tibble$age[i], scraping_tibble$sex[i], scraping_tibble$transmission[i])
+    
+    # Moving downloaded file to the correct location
+    file.rename(str_c(download_dir, "/", "AtlasPlusTableData.csv"), str_c(file_path, "/", "AtlasPlusTableData_", i ,".csv"))
+    
+    #Waiting until file is in its proper location
+    repeat{
+      if (file.exists(str_c(file_path, "/", "AtlasPlusTableData_", i ,".csv")) == TRUE) {
+        Sys.sleep(5)
+        break
+      } else {
+        Sys.sleep(1)
+      }
+    }
+    
+    # Logging metadata
     
     return_metadata[[length(return_metadata) + 1]] <- list(run = i,
-                                                           location = str_c("Error: File was not downloaded before the timeout occured (", download_timeout, " seconds)"))
+                                                           location = str_replace(file_path, here::here("temp"), ""))
     
-    next
     
   }
-  
-  
-  # Creating directory for file location
-  file_path <- directory_creator(here::here("temp"), indicator, scraping_tibble$geography[i], scraping_tibble$race[i], scraping_tibble$age[i], scraping_tibble$sex[i], scraping_tibble$transmission[i])
-  
-  # Moving downloaded file to the correct location
-  file.rename(str_c(download_dir, "/", "AtlasPlusTableData.csv"), str_c(file_path, "/", "AtlasPlusTableData_", i ,".csv"))
-  
-  #Waiting until file is in its proper location
-  repeat{
-    if (file.exists(str_c(file_path, "/", "AtlasPlusTableData_", i ,".csv")) == TRUE) {
-      Sys.sleep(5)
-      break
-    } else {
-      Sys.sleep(1)
-    }
-  }
-  
-  # Logging metadata
-  
-  return_metadata[[length(return_metadata) + 1]] <- list(run = i,
-                                                         location = str_replace(file_path, here::here("temp"), ""))
-  
 }
 
+atlas_scraper(from = 1, to = 3, age_metadata, race_metadata, sex_metadata, transmission_metadata)
 
-return_metadata <- return_metadata |>
-  bind_rows()
-
-saveRDS(return_metadata, str_c(here::here("temp"), "/return_metadata_", str_replace_all(ymd_hms(Sys.time()), " |:", "_"), ".RDS"))
 
 test <- readRDS(here::here("temp", "return_metadata_2025-11-14_22_56_52.247803.RDS"))
 
