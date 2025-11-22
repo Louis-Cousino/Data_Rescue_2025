@@ -308,8 +308,6 @@ scraping_tibble <- scraping_tibble |>
 
 ## EXAMINE 961
 
-# 1:(nrow(scraping_tibble)+1)
-
 atlas_scraper <- function (from, to, ...) {
   
   on.exit({
@@ -326,6 +324,9 @@ atlas_scraper <- function (from, to, ...) {
       bind_rows()
     
     saveRDS(return_metadata, str_c(here::here("temp"), "/return_metadata_", str_replace_all(ymd_hms(Sys.time()), " |:", "_"), ".RDS"))
+    
+    return(i)
+    
   }, add = TRUE)
   
   next_btn <- "document.querySelector('#wizardQT > div:nth-child(2) > ul > li:nth-child(3) > a').click();"
@@ -359,7 +360,7 @@ atlas_scraper <- function (from, to, ...) {
   
   remDr$setTimeout(type="script", 10000000)
   
-  for (i in to:from) {
+  for (i in from:to) {
     
     print(i)
 
@@ -621,6 +622,22 @@ atlas_scraper <- function (from, to, ...) {
       next
     }
     
+    Sys.sleep(3)
+    
+    console_log <- remDr$log("browser") |> 
+      as.data.frame()
+    
+    Sys.sleep(1)
+    
+    if (nrow(console_log) != 0) {
+      return_metadata[[length(return_metadata) + 1]] <- list(run = i,
+                                                             location = "NA - Stratification not available. An error was thrown")
+      
+      Sys.sleep(1)
+      
+      next
+    }
+    
     explicit_wait(element = "#pivotTable_info",
                   remDr = remDr,
                   timeout = 300)
@@ -718,10 +735,6 @@ atlas_scraper <- function (from, to, ...) {
   }
 }
 
-atlas_scraper(from = 1, to = 3, age_metadata, race_metadata, sex_metadata, transmission_metadata)
+last_number <- atlas_scraper(from = 1171, to = (nrow(scraping_tibble)+1), age_metadata, race_metadata, sex_metadata, transmission_metadata)
 
 
-test <- readRDS(here::here("temp", "return_metadata_2025-11-14_22_56_52.247803.RDS"))
-
-
-for (i in sample(1:100, 7)) {print(i)}
