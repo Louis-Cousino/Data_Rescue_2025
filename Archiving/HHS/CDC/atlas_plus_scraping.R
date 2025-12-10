@@ -137,7 +137,7 @@ sex_metadata <- tibble(
   text = c("Both Sexes", "Sex - Male", "Sex - Female"),
   value = c("document.querySelector('#allTC');",
             "document.querySelector('#specificTransCat > label').click(); document.querySelectorAll('#transcatList > fieldset > div:nth-child(n) > label').forEach(el => el.click());", 
-            "document.querySelector('#specificTransCat > label').click(); document.querySelector('#transcatList > fieldset > div:nth-child(3) > label').click(); document.querySelector('#transcatList > fieldset > div:nth-child(5) > label').click(); document.querySelector('#transcatList > fieldset > div:nth-child(6) > label').click();")
+            "document.querySelector('#specificTransCat > label').click(); element = document.querySelectorAll('#transcatList > fieldset > div:nth-child(n) > label').forEach(el => {optionString = el.textContent; if (!optionString.includes('Male-to-male')){el.click();}});")
   
 )
 
@@ -147,7 +147,7 @@ transmission_metadata <- tibble(
   text = c("All Transmission", "Stratified Transmission Options", "Stratified Transmission Options (Female)"),
   value = c("document.querySelector('#divTransCat > div > div.panel-body > fieldset > div:nth-child(2) > label');",
             "document.querySelector('#specificTransCat > label').click(); document.querySelectorAll('#transcatList > fieldset > div:nth-child(n) > label').forEach(el => el.click());", 
-            "document.querySelector('#specificTransCat > label').click(); document.querySelector('#transcatList > fieldset > div:nth-child(3) > label').click(); document.querySelector('#transcatList > fieldset > div:nth-child(5) > label').click(); document.querySelector('#transcatList > fieldset > div:nth-child(6) > label').click();")
+            "document.querySelector('#specificTransCat > label').click(); element = document.querySelectorAll('#transcatList > fieldset > div:nth-child(n) > label').forEach(el => {optionString = el.textContent; if (!optionString.includes('Male-to-male')){el.click();}});")
   
 )
 
@@ -320,10 +320,15 @@ atlas_scraper <- function (from, to, ...) {
     
     timer$stop("AltasPlus Run")
     
+    timer_return <- timer$eventTable
+    
     return_metadata <- return_metadata |>
       bind_rows()
     
-    saveRDS(return_metadata, str_c(here::here("temp"), "/return_metadata_", str_replace_all(ymd_hms(Sys.time()), " |:", "_"), ".RDS"))
+    return_list <- list(return_metadata,
+                        timer_return)
+    
+    saveRDS(return_list, str_c(here::here("temp"), "/return_metadata_", str_replace_all(ymd_hms(Sys.time()), " |:", "_"), ".RDS"))
     
     return(i)
     
@@ -348,7 +353,7 @@ atlas_scraper <- function (from, to, ...) {
   
   timer <- timeR::createTimer()
   
-  timer$start("AltasPlus Run")
+  timer_return <- timer$start("AltasPlus Run")
   
   return_metadata <- list()
   
@@ -525,7 +530,8 @@ atlas_scraper <- function (from, to, ...) {
       
       if (str_detect(sex_class, "disabled") == TRUE && scraping_tibble$sex[i] != "Both Sexes") {
         return_metadata[[length(return_metadata) + 1]] <- list(run = i,
-                                                               location = "NA - Stratification not available (Based on Sex)")
+                                                               location = "NA - Stratification not available (Based on Sex)",
+                                                               time_at_download = Sys.time())
         
         next
       }
@@ -559,6 +565,18 @@ atlas_scraper <- function (from, to, ...) {
                                   return text_return") |> 
         as.character()
       
+      # This is for counting the number of options that are not "Male-to-male". 
+      # If the run specifies "Female-only" transmission categories and there are none available,
+      # then no new information will be gained and we can move to the next run
+      
+      female_transmission_options <- remDr$executeScript("var n = 0;
+                    element = document.querySelectorAll('#transcatList > fieldset > div:nth-child(n) > label')
+                    .forEach(el => {optionString = el.textContent;
+                      if (!optionString.includes('Male-to-male')){n = n+1;}
+                    });
+                    return n") |> 
+        as.integer()
+      
       if (transmission_header == "Country of birth" && scraping_tibble$transmission[i] != "All Transmission") {
         
         remDr$executeScript("document.querySelector('#transcatList > fieldset > div:nth-child(2) > label').click();
@@ -573,7 +591,15 @@ atlas_scraper <- function (from, to, ...) {
       } else if (str_detect(transmission_class, "disabled") == TRUE && scraping_tibble$transmission[i] != "All Transmission") {
         
         return_metadata[[length(return_metadata) + 1]] <- list(run = i,
-                                                               location = "NA - Stratification not available (Based on transmission)")
+                                                               location = "NA - Stratification not available (Based on transmission)",
+                                                               time_at_download = Sys.time())
+        
+        next
+      } else if (female_transmission_options == 0 && scraping_tibble$transmission[i] == "Stratified Transmission Options (Female)") {
+        
+        return_metadata[[length(return_metadata) + 1]] <- list(run = i,
+                                                               location = "NA - Stratification not available (Based on transmission)",
+                                                               time_at_download = Sys.time())
         
         next
       }
@@ -581,6 +607,8 @@ atlas_scraper <- function (from, to, ...) {
       selector_function("transmission", transmission_metadata, i, remDr)
       
     }
+    
+    Sys.sleep(3)
     
     # Creating Table
     remDr$executeScript("document.querySelector('#wizardQT > div:nth-child(2) > ul > li:nth-child(4) > a').click();")
@@ -596,7 +624,8 @@ atlas_scraper <- function (from, to, ...) {
     
     if (nrow(console_log) != 0) {
       return_metadata[[length(return_metadata) + 1]] <- list(run = i,
-                                                             location = "NA - Stratification not available. An error was thrown")
+                                                             location = "NA - Stratification not available. An error was thrown",
+                                                             time_at_download = Sys.time())
       
       Sys.sleep(1)
       
@@ -617,26 +646,35 @@ atlas_scraper <- function (from, to, ...) {
     
     if (query_error == TRUE) {
       return_metadata[[length(return_metadata) + 1]] <- list(run = i,
-                                                             location = "Error: No data found matching query criteria.")
+                                                             location = "Error: No data found matching query criteria.",
+                                                             time_at_download = Sys.time())
       
       next
     }
     
     Sys.sleep(3)
     
-    console_log <- remDr$log("browser") |> 
-      as.data.frame()
+    table_footnote <- remDr$executeScript("element = document.querySelector('#naFootnotes');
+                                  text = element.textContent;
+                                  return text;") |> 
+      as.character()
     
-    Sys.sleep(1)
+    table_size <- remDr$executeScript("element = document.querySelector('#pivotTable_info');
+                                  if (element) {return 'TRUE'} else {return 'FALSE'};") |> 
+      as.logical()
     
-    if (nrow(console_log) != 0) {
-      return_metadata[[length(return_metadata) + 1]] <- list(run = i,
-                                                             location = "NA - Stratification not available. An error was thrown")
+    if (str_detect(table_footnote, "NA") == TRUE && table_size == FALSE) {
       
-      Sys.sleep(1)
+      return_metadata[[length(return_metadata) + 1]] <- list(run = i,
+                                                             location = "An error was thrown, table may not exist",
+                                                             time_at_download = Sys.time())
       
       next
+      
     }
+    
+    
+
     
     explicit_wait(element = "#pivotTable_info",
                   remDr = remDr,
@@ -657,7 +695,8 @@ atlas_scraper <- function (from, to, ...) {
     if (table_size >200000) {
       
       return_metadata[[length(return_metadata) + 1]] <- list(run = i,
-                                                             location = str_c("Error: Table was too large (", table_size, " rows)"))
+                                                             location = str_c("Error: Table was too large (", table_size, " rows)"),
+                                                             time_at_download = Sys.time())
       
       next
     }
@@ -703,7 +742,8 @@ atlas_scraper <- function (from, to, ...) {
     if (download_fail == TRUE) {
       
       return_metadata[[length(return_metadata) + 1]] <- list(run = i,
-                                                             location = str_c("Error: File was not downloaded before the timeout occured (", download_timeout, " seconds)"))
+                                                             location = str_c("Error: File was not downloaded before the timeout occured (", download_timeout, " seconds)"),
+                                                             time_at_download = Sys.time())
       
       next
       
@@ -729,12 +769,16 @@ atlas_scraper <- function (from, to, ...) {
     # Logging metadata
     
     return_metadata[[length(return_metadata) + 1]] <- list(run = i,
-                                                           location = str_replace(file_path, here::here("temp"), ""))
+                                                           location = str_replace(file_path, here::here("temp"), ""),
+                                                           time_at_download = Sys.time())
     
     
   }
 }
 
-last_number <- atlas_scraper(from = 1171, to = (nrow(scraping_tibble)+1), age_metadata, race_metadata, sex_metadata, transmission_metadata)
+last_number <- atlas_scraper(from = 1638, to = nrow(scraping_tibble), age_metadata, race_metadata, sex_metadata, transmission_metadata)
+
+test <- readRDS("C:/Users/louis/OneDrive/Documents/Data_Rescue_2025/temp/return_metadata_2025-11-28_23_50_33.602032.RDS")
+
 
 
