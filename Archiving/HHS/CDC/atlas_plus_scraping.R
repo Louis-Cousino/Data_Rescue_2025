@@ -527,8 +527,21 @@ atlas_scraper <- function (from, to, ...) {
                                   return text_return") |> 
         as.character()
       
+      specific_sex <- remDr$executeScript("text = document.querySelector('#specificSex'); 
+                                  text_return = window.getComputedStyle(text).display;
+                                  return text_return") |> 
+        as.character()
+      
       
       if (str_detect(sex_class, "disabled") == TRUE && scraping_tibble$sex[i] != "Both Sexes") {
+        return_metadata[[length(return_metadata) + 1]] <- list(run = i,
+                                                               location = "NA - Stratification not available (Based on Sex)",
+                                                               time_at_download = Sys.time())
+        
+        next
+      }
+      
+      if (str_detect(specific_sex, "none") == TRUE && scraping_tibble$sex[i] != "Both Sexes") {
         return_metadata[[length(return_metadata) + 1]] <- list(run = i,
                                                                location = "NA - Stratification not available (Based on Sex)",
                                                                time_at_download = Sys.time())
@@ -776,9 +789,12 @@ atlas_scraper <- function (from, to, ...) {
   }
 }
 
-last_number <- atlas_scraper(from = 1638, to = nrow(scraping_tibble), age_metadata, race_metadata, sex_metadata, transmission_metadata)
+last_number <- atlas_scraper(from = 1736, to = nrow(scraping_tibble), age_metadata, race_metadata, sex_metadata, transmission_metadata)
 
-test <- readRDS("C:/Users/louis/OneDrive/Documents/Data_Rescue_2025/temp/return_metadata_2025-11-28_23_50_33.602032.RDS")
+test <- readRDS("C:/Users/Louis/OneDrive - Grand Valley State University/R Projects/Personal Projects/Data_Rescue_2025/temp/return_metadata_2026-01-08_12_44_00.586513.RDS")
 
+test2 <- scraping_tibble |> 
+  slice(1736:1737)
 
+test3 <- test[[1]]
 
