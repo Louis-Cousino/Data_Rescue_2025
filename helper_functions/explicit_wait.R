@@ -18,7 +18,7 @@ explicit_wait <- function(element, timeout, remDr, reverse = "n") {
       as.logical()
     
     if (reverse == "y") {check <- !check}
-    
+
     if(check == TRUE) {
       
       Sys.sleep(1)
@@ -31,7 +31,7 @@ explicit_wait <- function(element, timeout, remDr, reverse = "n") {
       
     }
     
-    Sys.sleep(1)
+    Sys.sleep(2)
     
   }
 }
