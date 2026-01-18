@@ -84,7 +84,7 @@ indicator_metadata <- indicator_metadata |>
 sdoh_metadata <- indicator_metadata |> 
   slice_tail(n = 6)
 
-indicator_metadata <- indicator_metadata |> 
+indicator_metadata <- indicator_metadata |>
   slice_head(n = -6)
 
 
@@ -341,6 +341,7 @@ atlas_scraper <- function (from, to, ...) {
   chrome_prefs <- list(
     "download.prompt_for_download" = FALSE,
     "download.directory_upgrade" = TRUE,
+    "safebrowsing.disable_download_protection" = TRUE,
     "safebrowsing.enabled" = TRUE,
     'unexpectedAlertBehaviour' = 'accept',
     "profile.default_content_setting_values.automatic_downloads" = 1 # Allows chrome to download multiple files from the same site in one session
@@ -415,12 +416,52 @@ atlas_scraper <- function (from, to, ...) {
     
     Sys.sleep(1)
     
-    selector_function("indicator", indicator_metadata, i, remDr)
+    # Selecting the "Social Determinants of Health among the U.S. population" when needed. 
+    
+    if (str_detect(indicator, str_c(indicator_list)) == FALSE) {
+      
+      remDr$executeScript("document.querySelector('#wizardQT-p-0 > fieldset > label:nth-child(3)').click();")
+      
+      Sys.sleep(1)
+      
+      selector_function("indicator", sdoh_metadata, i, remDr)
+      
+      } else {
+        selector_function("indicator", indicator_metadata, i, remDr)
+      }
     
     # Next Button
     remDr$executeScript(next_btn)
     
     # Geography Section
+    
+    nat_geo_class <- remDr$executeScript("text = document.querySelector('#wizardQT-p-1 > div:nth-child(3) > div.panel-body > fieldset > label:nth-child(2)'); 
+                                  text_return = text.className;
+                                  return text_return") |> 
+      as.character()
+    
+    state_geo_class <- remDr$executeScript("text = document.querySelector('#wizardQT-p-1 > div:nth-child(3) > div.panel-body > fieldset > label:nth-child(4)'); 
+                                  text_return = text.className;
+                                  return text_return") |> 
+      as.character()
+    
+    if (str_detect(nat_geo_class, "disabled") == TRUE && scraping_tibble$geography[i] == "National") {
+      return_metadata[[length(return_metadata) + 1]] <- list(run = i,
+                                                             location = "NA - Stratification not available (Based on Geography)",
+                                                             time_at_download = Sys.time())
+      
+      next
+    } else if (str_detect(state_geo_class, "disabled") == TRUE && scraping_tibble$geography[i] == "State") {
+      return_metadata[[length(return_metadata) + 1]] <- list(run = i,
+                                                             location = "NA - Stratification not available (Based on Geography)",
+                                                             time_at_download = Sys.time())
+      
+      next
+    }
+    
+    
+    
+    
     JS_explicit_wait(script = "text = document.querySelector('#wizardQT-p-1'); 
                                   text_return = window.getComputedStyle(text).display;
                                   return text_return",
@@ -439,12 +480,12 @@ atlas_scraper <- function (from, to, ...) {
     
     remDr$executeScript(as.character(year_metadata[2]))
     
-    # Next Button
-    remDr$executeScript(next_btn)
-    
     # Demographic Selection (If needed)
     
     if (str_detect(indicator, str_c(indicator_list)) == TRUE) {
+      
+      # Next Button
+      remDr$executeScript(next_btn)
       
       JS_explicit_wait(script = "text = document.querySelector('#wizardQT-p-3'); 
                                   text_return = window.getComputedStyle(text).display;
@@ -793,6 +834,7 @@ atlas_scraper <- function (from, to, ...) {
       
       download_check(download_dir, timeout = download_timeout)
       
+      
     },
     error = function(e){
       
@@ -837,9 +879,31 @@ atlas_scraper <- function (from, to, ...) {
   }
 }
 
-last_number <- atlas_scraper(from = 5713, to = nrow(scraping_tibble), age_metadata, race_metadata, sex_metadata, transmission_metadata)
 
+last_number <- list()
 
+last_number[[1]] <- 1
+
+run_to <- nrow(scraping_tibble)
+
+# Dynamic error checking: If the scraper consistently fails on an iteration, then it stops.
+# This keeps the program running if an error is thrown due to one-off conditions (ex. a brief drop in internet connection)
+
+repeat ({
+  
+  last_number[[length(last_number)+1]] <- atlas_scraper(from = last_number[[length(last_number)]], to = run_to, age_metadata, race_metadata, sex_metadata, transmission_metadata)
+  
+  if(length(last_number)  >= 3) {
+    if (last_number[[length(last_number)]] == last_number[[length(last_number)-1]] && last_number[[length(last_number)-1]] == last_number[[length(last_number)-2]]) {
+      
+      last_number[[length(last_number)+1]] <- str_c("Please check run #", last_number[[length(last_number)]], " as an error occured three times in a row.")
+      
+      break
+    } else if (last_number[[length(last_number)]] == run_to) {
+      break
+    }
+  }
+})
 
 test <- readRDS("F:/temp/return_metadata_2026-01-13_15_13_36.968331.RDS")
 
