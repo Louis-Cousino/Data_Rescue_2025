@@ -332,9 +332,18 @@ atlas_scraper <- function (from, to, ...) {
     
     saveRDS(return_list, str_c("F:/temp", "/return_metadata_", str_replace_all(ymd_hms(Sys.time()), " |:", "_"), ".RDS"))
     
-    return(i)
+    # Returning i+1 when an indicator is finished to prevent looping of the last run of that indicator.
+    if (last_run_in_set == TRUE && expected_error == TRUE) {
+      return(list(list(i+1), list("First Run in Set")))
+    } else if (i == to) {
+      return(list(list(i), list("Final Run")))
+    } else {
+      return(list(list(i), list("Error")))
+    }
     
   }, add = TRUE)
+  
+  expected_error <- FALSE
   
   next_btn <- "document.querySelector('#wizardQT > div:nth-child(2) > ul > li:nth-child(3) > a').click();"
   
@@ -350,7 +359,7 @@ atlas_scraper <- function (from, to, ...) {
   
   eCaps <- list(chromeOptions = list(
     # args = c('--headless', '--disable-gpu', '--no-sandbox'),
-    args = c('--disable-popup-blocking', '--disable-notifications'),
+    args = c('--disable-popup-blocking', '--disable-notifications', '--headless', '--disable-gpu', '--no-sandbox'),
     prefs = chrome_prefs
   ))
   
@@ -369,6 +378,8 @@ atlas_scraper <- function (from, to, ...) {
   remDr$setTimeout(type="script", 10000000)
   
   for (i in from:to) {
+    
+    last_run_in_set <- scraping_tibble$indicator[i] != scraping_tibble$indicator[i+1]
     
     print(i)
 
@@ -456,6 +467,14 @@ atlas_scraper <- function (from, to, ...) {
                                                              location = "NA - Stratification not available (Based on Geography)",
                                                              time_at_download = Sys.time())
       
+      # Logging metadata after each indicator finishes to prevent loss of progress in the event of a crash
+      # (My computer crashed because of an external drive unrelated to this and I lost a few hours)
+      
+      if (last_run_in_set == TRUE) {
+        expected_error <- TRUE
+        stop()
+        } else if (is.na(last_run_in_set) == TRUE) {}
+      
       next
     }
     
@@ -512,6 +531,11 @@ atlas_scraper <- function (from, to, ...) {
                                                                location = "NA - Stratification not available (Based on Age)",
                                                                time_at_download = Sys.time())
         
+        if (last_run_in_set == TRUE) {
+          expected_error <- TRUE
+          stop()
+        } else if (is.na(last_run_in_set) == TRUE) {}
+        
         next
       }
       
@@ -521,6 +545,11 @@ atlas_scraper <- function (from, to, ...) {
                                                                location = "NA - Stratification not available (Based on Young Age)",
                                                                time_at_download = Sys.time())
         
+        if (last_run_in_set == TRUE) {
+          expected_error <- TRUE
+          stop()
+        } else if (is.na(last_run_in_set) == TRUE) {}
+        
         next
         
       } else if (older_age_option == "none" && scraping_tibble$age[i] == "Age - 50 and older") {
@@ -528,6 +557,11 @@ atlas_scraper <- function (from, to, ...) {
         return_metadata[[length(return_metadata) + 1]] <- list(run = i,
                                                                location = "NA - Stratification not available (Based on Old Age)",
                                                                time_at_download = Sys.time())
+        
+        if (last_run_in_set == TRUE) {
+          expected_error <- TRUE
+          stop()
+        } else if (is.na(last_run_in_set) == TRUE) {}
         
         next
         
@@ -541,6 +575,11 @@ atlas_scraper <- function (from, to, ...) {
         return_metadata[[length(return_metadata) + 1]] <- list(run = i,
                                                                location = "NA - Stratification not available (Based on Age)",
                                                                time_at_download = Sys.time())
+        
+        if (last_run_in_set == TRUE) {
+          expected_error <- TRUE
+          stop()
+        } else if (is.na(last_run_in_set) == TRUE) {}
         
         next
       }
@@ -569,6 +608,11 @@ atlas_scraper <- function (from, to, ...) {
                                                                location = "NA - Stratification not available (Based on Race)",
                                                                time_at_download = Sys.time())
         
+        if (last_run_in_set == TRUE) {
+          expected_error <- TRUE
+          stop()
+        } else if (is.na(last_run_in_set) == TRUE) {}
+        
         next
       }
       
@@ -580,6 +624,11 @@ atlas_scraper <- function (from, to, ...) {
         return_metadata[[length(return_metadata) + 1]] <- list(run = i,
                                                                location = "NA - Stratification not available (Based on Race)",
                                                                time_at_download = Sys.time())
+        
+        if (last_run_in_set == TRUE) {
+          expected_error <- TRUE
+          stop()
+        } else if (is.na(last_run_in_set) == TRUE) {}
         
         next
       }
@@ -611,6 +660,11 @@ atlas_scraper <- function (from, to, ...) {
                                                                location = "NA - Stratification not available (Based on Sex)",
                                                                time_at_download = Sys.time())
         
+        if (last_run_in_set == TRUE) {
+          expected_error <- TRUE
+          stop()
+        } else if (is.na(last_run_in_set) == TRUE) {}
+        
         next
       }
       
@@ -618,6 +672,11 @@ atlas_scraper <- function (from, to, ...) {
         return_metadata[[length(return_metadata) + 1]] <- list(run = i,
                                                                location = "NA - Stratification not available (Based on Sex)",
                                                                time_at_download = Sys.time())
+        
+        if (last_run_in_set == TRUE) {
+          expected_error <- TRUE
+          stop()
+        } else if (is.na(last_run_in_set) == TRUE) {}
         
         next
       }
@@ -663,6 +722,11 @@ atlas_scraper <- function (from, to, ...) {
                                                                location = "NA - Stratification not available (Based on transmission)",
                                                                time_at_download = Sys.time())
         
+        if (last_run_in_set == TRUE) {
+          expected_error <- TRUE
+          stop()
+        } else if (is.na(last_run_in_set) == TRUE) {}
+        
         next
         
       } else if (str_detect(transmission_class, "disabled") == TRUE && scraping_tibble$transmission[i] != "All Transmission") {
@@ -671,12 +735,22 @@ atlas_scraper <- function (from, to, ...) {
                                                                location = "NA - Stratification not available (Based on transmission)",
                                                                time_at_download = Sys.time())
         
+        if (last_run_in_set == TRUE) {
+          expected_error <- TRUE
+          stop()
+        } else if (is.na(last_run_in_set) == TRUE) {}
+        
         next
       } else if (female_transmission_options == 0 && scraping_tibble$transmission[i] == "Stratified Transmission Options (Female)") {
         
         return_metadata[[length(return_metadata) + 1]] <- list(run = i,
                                                                location = "NA - Stratification not available (Based on transmission)",
                                                                time_at_download = Sys.time())
+        
+        if (last_run_in_set == TRUE) {
+          expected_error <- TRUE
+          stop()
+        } else if (is.na(last_run_in_set) == TRUE) {}
         
         next
       }
@@ -706,6 +780,11 @@ atlas_scraper <- function (from, to, ...) {
       
       Sys.sleep(1)
       
+      if (last_run_in_set == TRUE) {
+        expected_error <- TRUE
+        stop()
+      } else if (is.na(last_run_in_set) == TRUE) {}
+      
       next
     }
     
@@ -731,6 +810,11 @@ atlas_scraper <- function (from, to, ...) {
       
       Sys.sleep(1)
       
+      if (last_run_in_set == TRUE) {
+        expected_error <- TRUE
+        stop()
+      } else if (is.na(last_run_in_set) == TRUE) {}
+      
       next
     }
     
@@ -744,6 +828,11 @@ atlas_scraper <- function (from, to, ...) {
       return_metadata[[length(return_metadata) + 1]] <- list(run = i,
                                                              location = "Error: No data found matching query criteria.",
                                                              time_at_download = Sys.time())
+      
+      if (last_run_in_set == TRUE) {
+        expected_error <- TRUE
+        stop()
+      } else if (is.na(last_run_in_set) == TRUE) {}
       
       next
     }
@@ -770,6 +859,11 @@ atlas_scraper <- function (from, to, ...) {
       return_metadata[[length(return_metadata) + 1]] <- list(run = i,
                                                              location = "An error was thrown, table may not exist",
                                                              time_at_download = Sys.time())
+      
+      if (last_run_in_set == TRUE) {
+        expected_error <- TRUE
+        stop()
+      } else if (is.na(last_run_in_set) == TRUE) {}
       
       next
       
@@ -799,6 +893,11 @@ atlas_scraper <- function (from, to, ...) {
       return_metadata[[length(return_metadata) + 1]] <- list(run = i,
                                                              location = str_c("Error: Table was too large (", table_size, " rows)"),
                                                              time_at_download = Sys.time())
+      
+      if (last_run_in_set == TRUE) {
+        expected_error <- TRUE
+        stop()
+      } else if (is.na(last_run_in_set) == TRUE) {}
       
       next
     }
@@ -848,6 +947,11 @@ atlas_scraper <- function (from, to, ...) {
                                                              location = str_c("Error: File was not downloaded before the timeout occured (", download_timeout, " seconds)"),
                                                              time_at_download = Sys.time())
       
+      if (last_run_in_set == TRUE) {
+        expected_error <- TRUE
+        stop()
+      } else if (is.na(last_run_in_set) == TRUE) {}
+      
       next
       
     }
@@ -875,14 +979,17 @@ atlas_scraper <- function (from, to, ...) {
                                                            location = str_replace(file_path, here::here("temp"), ""),
                                                            time_at_download = Sys.time())
     
+    if (last_run_in_set == TRUE) {
+      expected_error <- TRUE
+      stop()
+    } else if (is.na(last_run_in_set) == TRUE) {}
+    
     
   }
 }
 
 
-last_number <- list()
-
-last_number[[1]] <- 1
+last_number <- list(list(1),list("Start Run"))
 
 run_to <- nrow(scraping_tibble)
 
@@ -891,17 +998,19 @@ run_to <- nrow(scraping_tibble)
 
 repeat ({
   
-  last_number[[length(last_number)+1]] <- atlas_scraper(from = last_number[[length(last_number)]], to = run_to, age_metadata, race_metadata, sex_metadata, transmission_metadata)
+  returned_list <- atlas_scraper(from = last_number[[1]][[length(last_number[[1]])]], to = run_to, age_metadata, race_metadata, sex_metadata, transmission_metadata)
   
-  if(length(last_number)  >= 3) {
-    if (last_number[[length(last_number)]] == last_number[[length(last_number)-1]] && last_number[[length(last_number)-1]] == last_number[[length(last_number)-2]]) {
-      
-      last_number[[length(last_number)+1]] <- str_c("Please check run #", last_number[[length(last_number)]], " as an error occured three times in a row.")
-      
-      break
-    } else if (last_number[[length(last_number)]] == run_to) {
-      break
-    }
+  # Placing returned data in its proper place
+  last_number[[1]][[length(last_number[[1]])+1]] <- as.numeric(returned_list[[1]])
+  last_number[[2]][[length(last_number[[2]])+1]] <- as.character(returned_list[[2]])
+  
+  if (length(last_number[[1]])  >= 3 && last_number[[1]][[length(last_number[[1]])]] == last_number[[1]][[length(last_number[[1]])-1]] && last_number[[1]][[length(last_number[[1]])-1]] == last_number[[1]][[length(last_number[[1]])-2]]) {
+    
+    last_number[[3]] <- str_c("Please check run #", last_number[[1]][[length(last_number[[1]])]], " as an error occured three times in a row.")
+    
+    break
+  } else if (last_number[[1]][[length(last_number[[1]])]] == run_to) { # Checking if the previous run is the last one.
+    break
   }
 })
 
