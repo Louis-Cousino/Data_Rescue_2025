@@ -23,6 +23,10 @@ source(here::here("helper_functions", "directory_creator.R"))
 source(here::here("helper_functions", "download_check.R"))
 source(here::here("helper_functions", "explicit_wait.R"))
 
+# Base directory
+
+base_dir <- "F:/final"
+
 # Defining default download location (Download folder)
 download_dir <- str_replace_all(file.path(Sys.getenv("USERPROFILE"), "Downloads"), "\\\\", "/")
 
@@ -218,6 +222,13 @@ scraping_tibble <- master_tibble |>
 scraping_tibble <- scraping_tibble |> 
   mutate(run = 1:nrow(scraping_tibble))
 
+if (file.exists(str_c(base_dir, "/metadata/scraping_list.RDS")) == FALSE) {
+  
+  scraping_tibble |> 
+    saveRDS(str_c(base_dir, "/metadata/scraping_list.RDS"))
+  
+}
+
 # Now that I have the list of runs, I need to implement a function to actually download the files
 
 # Overall process:
@@ -332,7 +343,7 @@ atlas_scraper <- function (run_list, large_run = FALSE, ...) {
     return_list <- list(return_metadata,
                         timer_return)
     
-    saveRDS(return_list, str_c("F:/temp", "/return_metadata_", str_replace_all(ymd_hms(Sys.time()), " |:", "_"), ".RDS"))
+    saveRDS(return_list, str_c(base_dir, "/Initial Run Metadata/return_metadata_", str_replace_all(ymd_hms(Sys.time()), " |:", "_"), ".RDS"))
     
     # Returning i+1 when an indicator is finished to prevent looping of the last run of that indicator.
     if (last_run_in_set == TRUE && expected_error == TRUE) {
@@ -1548,4 +1559,6 @@ repeat ({
   }
 })
 
-returned_list <- atlas_scraper(large_tables2$run, large_run = TRUE, age_metadata, race_metadata, sex_metadata, transmission_metadata)
+large_tables <- readRDS(str_c(base_dir, "/metadata/large_runs_metadata.RDS"))
+
+returned_list <- atlas_scraper(large_tables$run, large_run = TRUE, age_metadata, race_metadata, sex_metadata, transmission_metadata)
